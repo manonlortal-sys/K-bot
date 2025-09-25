@@ -16,6 +16,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def setup_hook():
     # Charger les cogs
     await bot.load_extension("cogs.welcome")
+    await bot.load_extension("cogs.tickets")
 
 
 # === Lancement du bot ===
