@@ -7,8 +7,8 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 
 # === Intents / Bot ===
 intents = discord.Intents.default()
-intents.members = True              # nécessaire pour on_member_join
-intents.message_content = True      # utile si tu gardes des commandes préfixées
+intents.members = True
+intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -17,8 +17,8 @@ async def setup_hook():
     await bot.load_extension("cogs.welcome")
     await bot.load_extension("cogs.tickets")
     await bot.load_extension("cogs.stocks")
+    await bot.load_extension("cogs.utils")   # 👈 ajout du nouveau cog
 
-    # Synchronisation globale des slash commands
     await bot.tree.sync()
     print("Slash commands synchronisées.")
 
