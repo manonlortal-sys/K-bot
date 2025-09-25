@@ -473,11 +473,3 @@ class Stocks(commands.Cog):
 # =========================
 async def setup(bot: commands.Bot):
     await bot.add_cog(Stocks(bot))
-
-Intégration (quand tu voudras l’ajouter dans tickets.py)
-
-Dans ton handler de fermeture (après avoir déterminé kind = "achat"/"vente" et amount), tu pourras appeler :
-
-stocks_cog = interaction.client.get_cog("Stocks")
-if stocks_cog:
-    await stocks_cog.apply_transaction(interaction.guild, interaction.user, kind, amount)
