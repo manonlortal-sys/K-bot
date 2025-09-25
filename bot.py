@@ -154,7 +154,7 @@ async def on_member_join(member: discord.Member):
 
     # --- Embed "pro" (sans fields) ---
     embed = discord.Embed(
-        title="🎉 Bienvenue sur le serveur !",
+        title="🎉 Bienvenue au K'rtel !",
         description=(
             f"👋 Salut {member.mention} !\n"
             "Choisis le rôle qui correspond à ton profil via les boutons ci-dessous. "
