@@ -168,9 +168,7 @@ async def on_member_join(member: discord.Member):
     )
 
     # Thumbnail (logo du serveur quand dispo)
-    embed.set_thumbnail(url="https://example.com/thumbnail.png")  # ← remplace par l'URL de ton logo
-    # Image principale (bannière / GIF)
-    embed.set_image(url="https://media.discordapp.net/attachments/1420787039346884778/1420788490035134484/Kbot_image_1-removebg-preview.png?ex=68d6abe4&is=68d55a64&hm=7448021bbf149ecf3e17145cb7ac3627b93560abe31248cb1e80f681ba94ab3b&=&format=webp&quality=lossless&width=233&height=459")  # ← remplace par ton image/GIF
+    embed.set_thumbnail(url="https://media.discordapp.net/attachments/1420787039346884778/1420788490035134484/Kbot_image_1-removebg-preview.png?ex=68d6abe4&is=68d55a64&hm=7448021bbf149ecf3e17145cb7ac3627b93560abe31248cb1e80f681ba94ab3b&=&format=webp&quality=lossless&width=233&height=459")  # ← remplace par ton image/GIF
 
     # Envoie l'embed + boutons destinés AU MEMBRE qui vient d'arriver
     await channel.send(embed=embed, view=RoleButtons(member))
