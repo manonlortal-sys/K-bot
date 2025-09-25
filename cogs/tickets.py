@@ -3,6 +3,7 @@ import datetime
 import discord
 from discord.ext import commands
 from discord import app_commands, ui, Interaction, TextStyle
+from zoneinfo import ZoneInfo
 
 # === IDs requis ===
 HUB_CHANNEL_ID = 1420800148157759540            # salon où vit l'embed avec les 2 boutons
@@ -22,6 +23,8 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
         super().__init__(timeout=180)
         self.opener = opener
         self.is_achat = is_achat
+
+        # Champs à remplir par l'admin
         self.amount = ui.TextInput(
             label="Montant de la transaction (en kamas)",
             placeholder="Ex: 12 500 000",
@@ -29,7 +32,16 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
             required=True,
             max_length=32,
         )
+        self.rate = ui.TextInput(
+            label="Taux de change (kamas/€)",
+            placeholder="Ex: 5M/1€",
+            style=TextStyle.short,
+            required=True,
+            max_length=32,
+        )
+
         self.add_item(self.amount)
+        self.add_item(self.rate)
 
     async def on_submit(self, interaction: Interaction):
         guild = interaction.guild
@@ -44,12 +56,17 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
             return
 
         admin = interaction.user
-        now = datetime.datetime.utcnow().strftime("%d/%m/%Y %H:%M UTC")
+        # Heure en Europe/Paris
+        now = datetime.datetime.now(ZoneInfo("Europe/Paris")).strftime("%d/%m/%Y %H:%M")
         kind = "achat" if self.is_achat else "vente"
 
         content = (
-            f"**Transaction du {now}** avec {self.opener.mention} : **{kind}** de **{self.amount.value}** kamas. "
-            f"Transaction gérée par {admin.mention}."
+            f"**Transaction du {now} (heure de Paris)**\n"
+            f"- Joueur : {self.opener.mention}\n"
+            f"- Type : **{kind}**\n"
+            f"- Montant : **{self.amount.value}** kamas\n"
+            f"- Taux : **{self.rate.value}**\n"
+            f"- Gérée par : {admin.mention}"
         )
         await archive_ch.send(content)
 
@@ -120,7 +137,7 @@ class TicketHubView(ui.View):
         title = "🎫 Ticket — Achat de kamas" if is_achat else "🎫 Ticket — Vente de kamas"
         desc = (
             "Merci d’avoir ouvert un ticket !\n\n"
-            "👉 Indique précisément votre demande : **montant** que vous souhaitez "
+            "👉 Indiquez précisément votre demande : **montant** que vous souhaitez "
             f"{'acheter' if is_achat else 'vendre'} (en kamas).\n\n"
             "⏳ Un administrateur va vous répondre. Merci de patienter.\n\n"
             "Quand l’échange est terminé, un **ADMIN** peut fermer le ticket avec le bouton ci-dessous."
@@ -139,7 +156,6 @@ class Tickets(commands.Cog):
     async def cog_load(self):
         self.bot.add_view(TicketHubView())
 
-    # Slash command pour publier l'embed du hub
     @app_commands.command(name="publish_tickets", description="Publie le message avec les boutons de tickets")
     async def publish_tickets(self, interaction: Interaction):
         if not isinstance(interaction.user, discord.Member):
