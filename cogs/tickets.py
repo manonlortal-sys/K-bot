@@ -2,7 +2,7 @@ import os
 import datetime
 import discord
 from discord.ext import commands
-from discord import ui, Interaction, TextStyle, Permissions
+from discord import app_commands, ui, Interaction, TextStyle
 
 # === IDs requis ===
 HUB_CHANNEL_ID = 1420800148157759540            # salon où vit l'embed avec les 2 boutons
@@ -14,6 +14,7 @@ ADMIN_ROLE_ID = int(os.getenv("ADMIN_ROLE_ID")) # rôle admin (depuis l'env Rend
 CUSTOM_ID_OPEN_ACHAT = "ticket_open:achat"
 CUSTOM_ID_OPEN_VENTE = "ticket_open:vente"
 CUSTOM_ID_CLOSE = "ticket_close"
+
 
 # ========== Modal de fermeture ==========
 class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
@@ -35,7 +36,6 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
         if guild is None:
             return
 
-        # Archivage
         archive_ch = guild.get_channel(ARCHIVE_CHANNEL_ID)
         if archive_ch is None:
             await interaction.response.send_message(
@@ -53,7 +53,6 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
         )
         await archive_ch.send(content)
 
-        # Confirme puis supprime le ticket
         await interaction.response.send_message("Ticket archivé et fermé. Le salon va être supprimé.", ephemeral=True)
         try:
             await interaction.channel.delete(reason=f"Ticket {kind} fermé par {admin}")
@@ -61,17 +60,15 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
             pass
 
 
-# ========== View dans le ticket (bouton Fermer) ==========
+# ========== View dans le ticket ==========
 class TicketControls(ui.View):
     def __init__(self, opener: discord.Member, is_achat: bool):
-        # Pas persistant: lié à la durée de vie du ticket
         super().__init__(timeout=None)
         self.opener = opener
         self.is_achat = is_achat
 
     @ui.button(label="Fermeture ticket", style=discord.ButtonStyle.danger, custom_id=CUSTOM_ID_CLOSE, emoji="🔒")
     async def close_ticket(self, interaction: Interaction, button: ui.Button):
-        # Seulement ADMIN
         admin_role = interaction.guild.get_role(ADMIN_ROLE_ID) if interaction.guild else None
         if admin_role is None or admin_role not in getattr(interaction.user, "roles", []):
             await interaction.response.send_message("Seul un administrateur peut fermer ce ticket.", ephemeral=True)
@@ -80,10 +77,9 @@ class TicketControls(ui.View):
         await interaction.response.send_modal(CloseTicketModal(self.opener, self.is_achat))
 
 
-# ========== View du hub (persistante) ==========
+# ========== View du hub ==========
 class TicketHubView(ui.View):
     def __init__(self):
-        # Vue persistante (stateless) — ne met PAS d'état d'utilisateur dedans.
         super().__init__(timeout=None)
 
     @ui.button(label="Achat de kamas", style=discord.ButtonStyle.green, emoji="💰", custom_id=CUSTOM_ID_OPEN_ACHAT)
@@ -101,17 +97,14 @@ class TicketHubView(ui.View):
             await interaction.response.send_message("Action impossible ici.", ephemeral=True)
             return
 
-        # Catégorie
         category = guild.get_channel(TICKETS_CATEGORY_ID)
         if not isinstance(category, discord.CategoryChannel):
             await interaction.response.send_message("Catégorie de tickets introuvable.", ephemeral=True)
             return
 
-        # Nom du salon
         base = "ticket-achat" if is_achat else "ticket-vente"
         name = f"{base}-{user.name}".lower().replace(" ", "-")
 
-        # Permissions : visible par ADMIN + user seulement
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True, embed_links=True),
@@ -122,22 +115,19 @@ class TicketHubView(ui.View):
                 view_channel=True, send_messages=True, manage_messages=True, attach_files=True, embed_links=True
             )
 
-        # Crée le salon (évite collisions de nom)
         channel = await guild.create_text_channel(name=name, category=category, overwrites=overwrites, reason="Ouverture ticket")
-        # Message d’accueil
         ping = f"{user.mention} {admin_role.mention if admin_role else ''}".strip()
         title = "🎫 Ticket — Achat de kamas" if is_achat else "🎫 Ticket — Vente de kamas"
         desc = (
             "Merci d’avoir ouvert un ticket !\n\n"
             "👉 Indique précisément votre demande : **montant** que vous souhaitez "
-            f"{'acheter' if is_achat else 'vendre'} (en kamas), et toute info utile.\n\n"
+            f"{'acheter' if is_achat else 'vendre'} (en kamas).\n\n"
             "⏳ Un administrateur va vous répondre. Merci de patienter.\n\n"
             "Quand l’échange est terminé, un **ADMIN** peut fermer le ticket avec le bouton ci-dessous."
         )
         embed = discord.Embed(title=title, description=desc, color=discord.Color.orange())
         await channel.send(content=ping, embed=embed, view=TicketControls(user, is_achat))
 
-        # Accusé de réception éphémère
         await interaction.response.send_message(f"Ticket créé : {channel.mention}", ephemeral=True)
 
 
@@ -147,19 +137,22 @@ class Tickets(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        # Enregistre la view persistante au chargement de l'extension
-        # (nécessaire pour que les boutons restent actifs après redeploy)
         self.bot.add_view(TicketHubView())
 
-    # (Optionnel) commande pour (re)publier l'embed du hub dans le salon fixe
-    @commands.command(name="publish_tickets")
-    @commands.has_role(ADMIN_ROLE_ID)
-    async def publish_tickets(self, ctx: commands.Context):
-        if ctx.guild is None:
+    # Slash command pour publier l'embed du hub
+    @app_commands.command(name="publish_tickets", description="Publie le message avec les boutons de tickets")
+    async def publish_tickets(self, interaction: Interaction):
+        if not isinstance(interaction.user, discord.Member):
             return
-        hub = ctx.guild.get_channel(HUB_CHANNEL_ID)
+
+        admin_role = interaction.guild.get_role(ADMIN_ROLE_ID) if interaction.guild else None
+        if admin_role is None or admin_role not in getattr(interaction.user, "roles", []):
+            await interaction.response.send_message("Seuls les administrateurs peuvent utiliser cette commande.", ephemeral=True)
+            return
+
+        hub = interaction.guild.get_channel(HUB_CHANNEL_ID)
         if hub is None:
-            await ctx.reply("Salon hub introuvable.", mention_author=False)
+            await interaction.response.send_message("Salon hub introuvable.", ephemeral=True)
             return
 
         embed = discord.Embed(
@@ -173,9 +166,8 @@ class Tickets(commands.Cog):
             color=discord.Color.orange(),
         )
         await hub.send(embed=embed, view=TicketHubView())
-        await ctx.message.add_reaction("✅")
+        await interaction.response.send_message("✅ Message de tickets publié.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Tickets(bot))
-
