@@ -1,4 +1,4 @@
-
+# cogs/tickets.py
 import os
 import datetime
 import discord
@@ -22,7 +22,6 @@ TZ_PARIS = ZoneInfo("Europe/Paris")
 
 # ---------- helpers ----------
 def _parse_kamas(text: str) -> int:
-    # Garde uniquement les chiffres (supporte "12 500 000" -> 12500000)
     digits = "".join(ch for ch in text if ch.isdigit())
     return int(digits) if digits else 0
 
@@ -34,7 +33,6 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
         self.opener = opener
         self.is_achat = is_achat
 
-        # Champs à remplir par l'admin
         self.amount = ui.TextInput(
             label="Montant de la transaction (en kamas)",
             placeholder="Ex: 12 500 000",
@@ -66,7 +64,6 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
             return
 
         admin = interaction.user
-        # Heure en Europe/Paris
         now = datetime.datetime.now(TZ_PARIS).strftime("%d/%m/%Y %H:%M")
         kind = "achat" if self.is_achat else "vente"
         amount_int = _parse_kamas(self.amount.value)
@@ -92,10 +89,8 @@ class CloseTicketModal(ui.Modal, title="Fermeture du ticket"):
                     amount=amount_int
                 )
             except Exception:
-                # On ne casse pas la fermeture de ticket si l'update stock échoue
                 pass
 
-        # Confirme puis supprime le ticket
         await interaction.response.send_message("Ticket archivé et fermé. Le salon va être supprimé.", ephemeral=True)
         try:
             await interaction.channel.delete(reason=f"Ticket {kind} fermé par {admin}")
@@ -180,10 +175,8 @@ class Tickets(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        # Enregistre la vue persistante pour que les boutons du hub restent cliquables après redeploy
         self.bot.add_view(TicketHubView())
 
-    # Slash command pour publier l'embed du hub
     @app_commands.command(name="publish_tickets", description="Publie le message avec les boutons de tickets")
     async def publish_tickets(self, interaction: Interaction):
         if not isinstance(interaction.user, discord.Member):
@@ -215,4 +208,3 @@ class Tickets(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Tickets(bot))
-
