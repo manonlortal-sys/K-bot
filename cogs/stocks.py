@@ -1,6 +1,6 @@
+# cogs/stocks.py
 import os
 import sqlite3
-import asyncio
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -24,7 +24,7 @@ TZ_PARIS = ZoneInfo("Europe/Paris")
 
 
 # =========================
-# Helpers DB (synchro, wrap async)
+# Helpers DB
 # =========================
 def _db_connect():
     conn = sqlite3.connect(DB_PATH)
@@ -81,7 +81,7 @@ def _select_global(guild_id: int) -> Tuple[int, Optional[int], Optional[int], Op
         return int(row[0]), row[1], row[2], row[3]
     return 0, None, None, None
 
-def _upsert_global(guild_id: int, amount: int, msg_channel_id: Optional[int], msg_id: Optional[int]) -> None:
+def _upsert_global_meta(guild_id: int, amount: int, msg_channel_id: Optional[int], msg_id: Optional[int]) -> None:
     conn = _db_connect()
     cur = conn.cursor()
     now = _now_paris_str()
@@ -117,7 +117,7 @@ def _insert_movement(guild_id: int, kind: str, amount: int, admin_id: Optional[i
     cur.execute("""
         INSERT INTO stock_movements(guild_id, admin_id, kind, amount, created_at)
         VALUES (?, ?, ?, ?, ?)
-    """, (guild_id, admin_id, kind, _abs(amount), datetime.now(TZ_PARIS).isoformat()))
+    """, (guild_id, admin_id, kind, abs(amount), datetime.now(TZ_PARIS).isoformat()))
     conn.commit()
     conn.close()
 
@@ -165,12 +165,17 @@ def _update_admin_amount(guild_id: int, admin_id: int, new_amount: int) -> None:
     conn.commit()
     conn.close()
 
-def _abs(x: int) -> int:
-    return x if x >= 0 else -x
+def _sum_admins(guild_id: int) -> int:
+    conn = _db_connect()
+    cur = conn.cursor()
+    cur.execute("SELECT COALESCE(SUM(amount),0) FROM stock_admin WHERE guild_id=?;", (guild_id,))
+    (total,) = cur.fetchone()
+    conn.close()
+    return int(total or 0)
 
 
 # =========================
-# Embeds builders
+# Embeds
 # =========================
 def _embed_global(amount: int, updated_at: Optional[str]) -> discord.Embed:
     title = "💰✨ 𝗦𝗧𝗢𝗖𝗞𝗦 𝗞𝗔𝗠𝗔𝗦 ✨💰"
@@ -179,8 +184,7 @@ def _embed_global(amount: int, updated_at: Optional[str]) -> discord.Embed:
         f"🕒 **Dernière mise à jour :** {updated_at or _now_paris_str()} (heure de Paris)"
     )
     color = discord.Color.green() if amount > 0 else discord.Color.red()
-    e = discord.Embed(title=title, description=desc, color=color)
-    return e
+    return discord.Embed(title=title, description=desc, color=color)
 
 def _embed_admin(member: discord.Member, amount: int, updated_at: Optional[str]) -> discord.Embed:
     title = f"👤 𝗦𝗧𝗢𝗖𝗞 — {member.display_name}"
@@ -189,7 +193,10 @@ def _embed_admin(member: discord.Member, amount: int, updated_at: Optional[str])
         f"🕒 **Dernière mise à jour :** {updated_at or _now_paris_str()} (heure de Paris)"
     )
     e = discord.Embed(title=title, description=desc, color=discord.Color.blue())
-    e.set_thumbnail(url=member.display_avatar.url if member.display_avatar else discord.Embed.Empty)
+    try:
+        e.set_thumbnail(url=member.display_avatar.url)
+    except Exception:
+        pass
     return e
 
 
@@ -197,64 +204,60 @@ def _embed_admin(member: discord.Member, amount: int, updated_at: Optional[str])
 # Cog Stocks
 # =========================
 class Stocks(commands.Cog):
-    """Gestion des stocks (global + par admin) avec embeds fixes et SQLite."""
+    """Stock global = somme des stocks des admins. Embeds fixes, SQLite."""
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     async def cog_load(self):
-        # Init DB au chargement du cog
         await self.bot.loop.run_in_executor(None, _db_init)
 
-    # -------------------------
-    # Méthode publique pour tickets
-    # -------------------------
-    async def apply_transaction(self, guild: discord.Guild, admin_member: discord.Member, kind: str, amount: int):
-        """
-        À appeler depuis le cog tickets à la fermeture:
-          - kind: 'achat' (stock +) ou 'vente' (stock -)
-          - amount: montant en kamas (positif)
-        Met à jour: stock global + stock de l'admin + édite les embeds si disponibles.
-        """
-        if kind not in ("achat", "vente"):
-            return
+    # ----- helper central : recompute global & refresh embed -----
+    async def _recompute_and_refresh_global(self, guild: discord.Guild):
+        total = await self.bot.loop.run_in_executor(None, _sum_admins, guild.id)
+        await self.bot.loop.run_in_executor(None, _update_global_amount, guild.id, total)
 
-        sign = 1 if kind == "achat" else -1
-        delta = sign * amount
-        guild_id = guild.id
-        admin_id = admin_member.id
-
-        # --- GLOBAL ---
-        current_global, g_ch_id, g_msg_id, _g_upd = await self.bot.loop.run_in_executor(None, _select_global, guild_id)
-        new_global = current_global + delta
-        await self.bot.loop.run_in_executor(None, _update_global_amount, guild_id, new_global)
-        await self.bot.loop.run_in_executor(None, _insert_movement, guild_id, kind, amount, admin_id)
-
-        # Edit embed global si message connu
-        if g_ch_id and g_msg_id:
-            ch = guild.get_channel(g_ch_id)
+        amount, ch_id, msg_id, upd = await self.bot.loop.run_in_executor(None, _select_global, guild.id)
+        if ch_id and msg_id:
+            ch = guild.get_channel(ch_id)
             if isinstance(ch, (discord.TextChannel, discord.Thread)):
                 try:
-                    msg = await ch.fetch_message(g_msg_id)
-                    e = _embed_global(new_global, _now_paris_str())
-                    await msg.edit(embed=e)
+                    msg = await ch.fetch_message(msg_id)
+                    await msg.edit(embed=_embed_global(amount, upd))
                 except discord.NotFound:
                     pass
 
-        # --- ADMIN ---
-        curr_admin, a_ch_id, a_msg_id, _a_upd = await self.bot.loop.run_in_executor(None, _select_admin, guild_id, admin_id)
-        new_admin = curr_admin + delta
-        await self.bot.loop.run_in_executor(None, _update_admin_amount, guild_id, admin_id, new_admin)
+    # ----- appelée depuis le cog tickets -----
+    async def apply_transaction(self, guild: discord.Guild, admin_member: discord.Member, kind: str, amount: int):
+        """
+        kind: 'achat' (+=) ou 'vente' (-=), amount > 0
+        Met à jour le stock de l'admin, enregistre mouvement, puis recalcule le global.
+        """
+        if kind not in ("achat", "vente") or amount <= 0:
+            return
 
-        # Edit embed admin si message connu
+        guild_id = guild.id
+        admin_id = admin_member.id
+
+        # admin courant
+        curr_admin, _, _, _ = await self.bot.loop.run_in_executor(None, _select_admin, guild_id, admin_id)
+        delta = amount if kind == "achat" else -amount
+        new_admin = max(0, curr_admin + delta)
+        await self.bot.loop.run_in_executor(None, _update_admin_amount, guild_id, admin_id, new_admin)
+        await self.bot.loop.run_in_executor(None, _insert_movement, guild_id, kind, amount, admin_id)
+
+        # refresh embed admin si connu
+        a_amount, a_ch_id, a_msg_id, a_upd = await self.bot.loop.run_in_executor(None, _select_admin, guild_id, admin_id)
         if a_ch_id and a_msg_id:
             ch2 = guild.get_channel(a_ch_id)
             if isinstance(ch2, (discord.TextChannel, discord.Thread)):
                 try:
                     msg2 = await ch2.fetch_message(a_msg_id)
-                    e2 = _embed_admin(admin_member, new_admin, _now_paris_str())
-                    await msg2.edit(embed=e2)
+                    await msg2.edit(embed=_embed_admin(admin_member, a_amount, a_upd))
                 except discord.NotFound:
                     pass
+
+        # recalcule le global
+        await self._recompute_and_refresh_global(guild)
 
     # -------------------------
     # Guards
@@ -264,9 +267,9 @@ class Stocks(commands.Cog):
         return role in getattr(member, "roles", [])
 
     # -------------------------
-    # Slash: publication des messages fixes
+    # Publication des messages fixes
     # -------------------------
-    @app_commands.command(name="stock_publish_global", description="Créer le message fixe du stock global (embed) dans le channel configuré.")
+    @app_commands.command(name="stock_publish_global", description="Créer/relier le message fixe du stock global.")
     async def stock_publish_global(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not self._is_admin_member(interaction.user):
             await interaction.response.send_message("Réservé aux administrateurs.", ephemeral=True)
@@ -281,17 +284,15 @@ class Stocks(commands.Cog):
             await interaction.response.send_message("Channel global introuvable.", ephemeral=True)
             return
 
-        # Upsert ligne globale si besoin
-        amount, _, _, updated_at = await self.bot.loop.run_in_executor(None, _select_global, guild.id)
-        embed = _embed_global(amount, updated_at)
-
+        total = await self.bot.loop.run_in_executor(None, _sum_admins, guild.id)
+        embed = _embed_global(total, _now_paris_str())
         msg = await channel.send(embed=embed)
-        await self.bot.loop.run_in_executor(None, _upsert_global, guild.id, amount, channel.id, msg.id)
+        await self.bot.loop.run_in_executor(None, _upsert_global_meta, guild.id, total, channel.id, msg.id)
 
-        await interaction.response.send_message("✅ Message de stock global publié.", ephemeral=True)
+        await interaction.response.send_message("✅ Message de stock global publié et lié.", ephemeral=True)
 
-    @app_commands.command(name="stock_publish_admin", description="Créer le message fixe du stock d'un admin (embed) dans le channel des admins.")
-    @app_commands.describe(admin="Sélectionnez l'administrateur")
+    @app_commands.command(name="stock_publish_admin", description="Créer/relier le message fixe du stock d'un admin.")
+    @app_commands.describe(admin="Administrateur cible")
     async def stock_publish_admin(self, interaction: discord.Interaction, admin: discord.Member):
         if not isinstance(interaction.user, discord.Member) or not self._is_admin_member(interaction.user):
             await interaction.response.send_message("Réservé aux administrateurs.", ephemeral=True)
@@ -301,7 +302,6 @@ class Stocks(commands.Cog):
         if guild is None:
             return
 
-        # Vérifie que la cible a bien le rôle admin
         if not self._is_admin_member(admin):
             await interaction.response.send_message("Le membre sélectionné n'a pas le rôle ADMIN.", ephemeral=True)
             return
@@ -313,99 +313,17 @@ class Stocks(commands.Cog):
 
         amount, _, _, updated_at = await self.bot.loop.run_in_executor(None, _select_admin, guild.id, admin.id)
         embed = _embed_admin(admin, amount, updated_at)
-
         msg = await channel.send(embed=embed)
         await self.bot.loop.run_in_executor(None, _upsert_admin, guild.id, admin.id, amount, channel.id, msg.id)
 
         await interaction.response.send_message(f"✅ Message de stock créé pour {admin.mention}.", ephemeral=True)
 
     # -------------------------
-    # Slash: ajustements manuels GLOBAL
+    # Ajustements MANUELS côté ADMIN (impactent le global)
     # -------------------------
-    @app_commands.command(name="stock_set", description="Fixer le stock global à un montant exact.")
-    @app_commands.describe(montant="Montant en kamas (entier, ex: 12500000)")
-    async def stock_set(self, interaction: discord.Interaction, montant: app_commands.Range[int, 0]):
-        if not isinstance(interaction.user, discord.Member) or not self._is_admin_member(interaction.user):
-            await interaction.response.send_message("Réservé aux administrateurs.", ephemeral=True)
-            return
-
-        guild = interaction.guild
-        if guild is None:
-            return
-
-        await self.bot.loop.run_in_executor(None, _update_global_amount, guild.id, int(montant))
-        await self.bot.loop.run_in_executor(None, _insert_movement, guild.id, "manual", int(montant), interaction.user.id)
-
-        # Edit embed si connu
-        amount, g_ch, g_msg, upd = await self.bot.loop.run_in_executor(None, _select_global, guild.id)
-        if g_ch and g_msg:
-            ch = guild.get_channel(g_ch)
-            if isinstance(ch, (discord.TextChannel, discord.Thread)):
-                try:
-                    msg = await ch.fetch_message(g_msg)
-                    await msg.edit(embed=_embed_global(amount, upd))
-                except discord.NotFound:
-                    pass
-
-        await interaction.response.send_message(f"✅ Stock global fixé à {amount:,} kamas.", ephemeral=True)
-
-    @app_commands.command(name="stock_add", description="Augmenter le stock global.")
-    @app_commands.describe(montant="Montant en kamas à ajouter")
-    async def stock_add(self, interaction: discord.Interaction, montant: app_commands.Range[int, 1]):
-        await self._adjust_global(interaction, int(montant))
-
-    @app_commands.command(name="stock_remove", description="Diminuer le stock global.")
-    @app_commands.describe(montant="Montant en kamas à retirer")
-    async def stock_remove(self, interaction: discord.Interaction, montant: app_commands.Range[int, 1]):
-        await self._adjust_global(interaction, -int(montant))
-
-    async def _adjust_global(self, interaction: discord.Interaction, delta: int):
-        if not isinstance(interaction.user, discord.Member) or not self._is_admin_member(interaction.user):
-            await interaction.response.send_message("Réservé aux administrateurs.", ephemeral=True)
-            return
-        guild = interaction.guild
-        if guild is None:
-            return
-
-        current, _, _, _ = await self.bot.loop.run_in_executor(None, _select_global, guild.id)
-        new_amount = current + delta
-        if new_amount < 0:
-            new_amount = 0
-        await self.bot.loop.run_in_executor(None, _update_global_amount, guild.id, new_amount)
-        await self.bot.loop.run_in_executor(None, _insert_movement, guild.id, "manual", _abs(delta), interaction.user.id)
-
-        amount, g_ch, g_msg, upd = await self.bot.loop.run_in_executor(None, _select_global, guild.id)
-        if g_ch and g_msg:
-            ch = guild.get_channel(g_ch)
-            if isinstance(ch, (discord.TextChannel, discord.Thread)):
-                try:
-                    msg = await ch.fetch_message(g_msg)
-                    await msg.edit(embed=_embed_global(amount, upd))
-                except discord.NotFound:
-                    pass
-
-        sign = "+" if delta >= 0 else "-"
-        await interaction.response.send_message(f"✅ Stock global ajusté ({sign}{_abs(delta):,}). Nouveau stock : {amount:,} kamas.", ephemeral=True)
-
-    # -------------------------
-    # Slash: ajustements manuels par ADMIN
-    # -------------------------
-    @app_commands.command(name="stock_set_admin", description="Fixer le stock d'un admin à un montant exact.")
+    @app_commands.command(name="stock_set_admin", description="Fixer le stock d'un admin (impacte le global).")
     @app_commands.describe(admin="Administrateur cible", montant="Montant en kamas")
     async def stock_set_admin(self, interaction: discord.Interaction, admin: discord.Member, montant: app_commands.Range[int, 0]):
-        await self._set_admin_amount(interaction, admin, int(montant))
-
-    @app_commands.command(name="stock_add_admin", description="Augmenter le stock d'un admin.")
-    @app_commands.describe(admin="Administrateur cible", montant="Montant en kamas à ajouter")
-    async def stock_add_admin(self, interaction: discord.Interaction, admin: discord.Member, montant: app_commands.Range[int, 1]):
-        await self._adjust_admin(interaction, admin, int(montant))
-
-    @app_commands.command(name="stock_remove_admin", description="Diminuer le stock d'un admin.")
-    @app_commands.describe(admin="Administrateur cible", montant="Montant en kamas à retirer")
-    async def stock_remove_admin(self, interaction: discord.Interaction, admin: discord.Member, montant: app_commands.Range[int, 1]):
-        await self._adjust_admin(interaction, admin, -int(montant))
-
-    async def _set_admin_amount(self, interaction: discord.Interaction, admin: discord.Member, new_amount: int):
         if not isinstance(interaction.user, discord.Member) or not self._is_admin_member(interaction.user):
             await interaction.response.send_message("Réservé aux administrateurs.", ephemeral=True)
             return
@@ -417,9 +335,11 @@ class Stocks(commands.Cog):
         if guild is None:
             return
 
-        await self.bot.loop.run_in_executor(None, _update_admin_amount, guild.id, admin.id, new_amount)
-        await self.bot.loop.run_in_executor(None, _insert_movement, guild.id, "manual", new_amount, admin.id)
+        current, _, _, _ = await self.bot.loop.run_in_executor(None, _select_admin, guild.id, admin.id)
+        await self.bot.loop.run_in_executor(None, _update_admin_amount, guild.id, admin.id, int(montant))
+        await self.bot.loop.run_in_executor(None, _insert_movement, guild.id, "manual", abs(int(montant) - current), admin.id)
 
+        # refresh embed admin
         amount, ch_id, msg_id, upd = await self.bot.loop.run_in_executor(None, _select_admin, guild.id, admin.id)
         if ch_id and msg_id:
             ch = guild.get_channel(ch_id)
@@ -430,7 +350,19 @@ class Stocks(commands.Cog):
                 except discord.NotFound:
                     pass
 
-        await interaction.response.send_message(f"✅ Stock de {admin.mention} fixé à {new_amount:,} kamas.", ephemeral=True)
+        # recalcule le global
+        await self._recompute_and_refresh_global(guild)
+        await interaction.response.send_message(f"✅ Stock de {admin.mention} fixé à {amount:,} kamas (global mis à jour).", ephemeral=True)
+
+    @app_commands.command(name="stock_add_admin", description="Augmenter le stock d'un admin (impacte le global).")
+    @app_commands.describe(admin="Administrateur cible", montant="Montant en kamas à ajouter")
+    async def stock_add_admin(self, interaction: discord.Interaction, admin: discord.Member, montant: app_commands.Range[int, 1]):
+        await self._adjust_admin(interaction, admin, int(montant))
+
+    @app_commands.command(name="stock_remove_admin", description="Diminuer le stock d'un admin (impacte le global).")
+    @app_commands.describe(admin="Administrateur cible", montant="Montant en kamas à retirer")
+    async def stock_remove_admin(self, interaction: discord.Interaction, admin: discord.Member, montant: app_commands.Range[int, 1]):
+        await self._adjust_admin(interaction, admin, -int(montant))
 
     async def _adjust_admin(self, interaction: discord.Interaction, admin: discord.Member, delta: int):
         if not isinstance(interaction.user, discord.Member) or not self._is_admin_member(interaction.user):
@@ -445,12 +377,11 @@ class Stocks(commands.Cog):
             return
 
         current, _, _, _ = await self.bot.loop.run_in_executor(None, _select_admin, guild.id, admin.id)
-        new_amount = current + delta
-        if new_amount < 0:
-            new_amount = 0
+        new_amount = max(0, current + delta)
         await self.bot.loop.run_in_executor(None, _update_admin_amount, guild.id, admin.id, new_amount)
-        await self.bot.loop.run_in_executor(None, _insert_movement, guild.id, "manual", _abs(delta), admin.id)
+        await self.bot.loop.run_in_executor(None, _insert_movement, guild.id, "manual", abs(delta), admin.id)
 
+        # refresh embed admin
         amount, ch_id, msg_id, upd = await self.bot.loop.run_in_executor(None, _select_admin, guild.id, admin.id)
         if ch_id and msg_id:
             ch = guild.get_channel(ch_id)
@@ -461,11 +392,41 @@ class Stocks(commands.Cog):
                 except discord.NotFound:
                     pass
 
+        # recalcule le global
+        await self._recompute_and_refresh_global(guild)
         sign = "+" if delta >= 0 else "-"
         await interaction.response.send_message(
-            f"✅ Stock de {admin.mention} ajusté ({sign}{_abs(delta):,}). Nouveau stock : {amount:,} kamas.",
+            f"✅ Stock de {admin.mention} ajusté ({sign}{abs(delta):,}). Nouveau : {amount:,} kamas (global mis à jour).",
             ephemeral=True
         )
+
+    # -------------------------
+    # Refresh manuel complet
+    # -------------------------
+    @app_commands.command(name="stock_refresh", description="Recalcule le stock global à partir des admins et réédite l'embed global.")
+    async def stock_refresh(self, interaction: discord.Interaction):
+        if not isinstance(interaction.user, discord.Member) or not self._is_admin_member(interaction.user):
+            await interaction.response.send_message("Réservé aux administrateurs.", ephemeral=True)
+            return
+        if interaction.guild is None:
+            return
+        await self._recompute_and_refresh_global(interaction.guild)
+        await interaction.response.send_message("🔄 Stock global recalculé et rafraîchi.", ephemeral=True)
+
+    # -------------------------
+    # Désactivation des commandes globales directes
+    # -------------------------
+    @app_commands.command(name="stock_set", description="(Désactivé) Le stock global est la somme des stocks admins.")
+    async def stock_set(self, interaction: discord.Interaction, montant: int):
+        await interaction.response.send_message("❌ Le stock global est calculé automatiquement (somme des stocks admins). Utilisez les commandes *_admin.", ephemeral=True)
+
+    @app_commands.command(name="stock_add", description="(Désactivé) Le stock global est la somme des stocks admins.")
+    async def stock_add(self, interaction: discord.Interaction, montant: int):
+        await interaction.response.send_message("❌ Le stock global est calculé automatiquement (somme des stocks admins). Utilisez les commandes *_admin.", ephemeral=True)
+
+    @app_commands.command(name="stock_remove", description="(Désactivé) Le stock global est la somme des stocks admins.")
+    async def stock_remove(self, interaction: discord.Interaction, montant: int):
+        await interaction.response.send_message("❌ Le stock global est calculé automatiquement (somme des stocks admins). Utilisez les commandes *_admin.", ephemeral=True)
 
 
 # =========================
