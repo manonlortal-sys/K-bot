@@ -17,7 +17,8 @@ async def setup_hook():
     await bot.load_extension("cogs.welcome")
     await bot.load_extension("cogs.tickets")
     await bot.load_extension("cogs.stocks")
-    await bot.load_extension("cogs.utils")   # 👈 ajout du nouveau cog
+    await bot.load_extension("cogs.utils")
+    await bot.load_extension("cogs.data")      # 👈 nouveau cog
 
     await bot.tree.sync()
     print("Slash commands synchronisées.")
