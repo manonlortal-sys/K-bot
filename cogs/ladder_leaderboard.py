@@ -114,46 +114,7 @@ class LadderLeaderboard(commands.Cog):
         embed.description = "\n".join(lines)
         return embed
 
-    # -------------------------
-    # RECOMPENSES
-    # -------------------------
-    def build_rewards_message(self, period: str):
-        data = load_json(DATA_FILE)
-        scores = data.get(period, {})
-        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-
-        start, end = period_dates(period)
-        lines = [
-            f"🏆 **RÉCOMPENSES LADDER PVP**",
-            f"**Période : du {start} au {end}**\n"
-        ]
-
-        for i, (uid, _) in enumerate(sorted_scores[:24], start=1):
-            mention = f"<@{uid}>"
-            if i <= 3:
-                reward = "3 percepteurs"
-            elif i <= 10:
-                reward = "2 percepteurs"
-            else:
-                reward = "1 percepteur"
-
-            lines.append(f"**{i}e** — {mention} → {reward}")
-
-        lines.append("")
-        lines.append(f"<@&{LEAD_ROLE_ID}>")
-        lines.append(
-            "Merci d’attribuer un percepteur :\n"
-            "- au meilleur PvM de la période\n"
-            "- au contrôleur perco\n"
-            "- au compteur ladder\n"
-        )
-        lines.append(
-            "⚠️ **Merci de lever vos percepteurs dans les 24h pour faire de la place aux joueurs de la période. "
-            "À défaut, vos percepteurs seront levés et les ressources intégrées au coffre guilde.**"
-        )
-
-        return "\n".join(lines)
-
+   
     # -------------------------
     # PERIOD TASK
     # -------------------------
@@ -218,16 +179,6 @@ class LadderLeaderboard(commands.Cog):
     @app_commands.command(name="ladder", description="Afficher le ladder actuel")
     async def ladder(self, interaction: discord.Interaction):
         await interaction.response.send_message(embed=self.build_embed(self.active_period))
-
-    @app_commands.command(name="recompenses", description="Envoyer les récompenses du ladder")
-    async def recompenses(self, interaction: discord.Interaction):
-        if not any(r.id in (LADDER_ROLE_ID, LEAD_ROLE_ID) for r in interaction.user.roles):
-            await interaction.response.send_message("Accès refusé.", ephemeral=True)
-            return
-
-        await interaction.response.send_message(
-            self.build_rewards_message(self.active_period)
-        )
 
     @commands.Cog.listener()
     async def on_ready(self):
