@@ -3,11 +3,11 @@ import threading
 import discord
 from discord.ext import commands
 
-from config import DISCORD_TOKEN
+from config import DISCORD_TOKEN, INSCRIPTION_CHANNEL, TEAMS_CHANNEL
 from web.flask_app import app
 
 # =========================
-# AUDIOOP FIX (Render)
+# FIX AUDIOOP
 # =========================
 try:
     import audioop
@@ -32,24 +32,25 @@ class MyBot(commands.Bot):
         self.teams = []
         self.teams_message_id = None
 
+        # IMPORTANT
+        self.INSCRIPTION_CHANNEL = INSCRIPTION_CHANNEL
+        self.TEAMS_CHANNEL = TEAMS_CHANNEL
+
+    async def setup_hook(self):
+        await self.load_extension("cogs.registration")
+        await self.load_extension("cogs.teams")
+        await self.load_extension("cogs.payment")
+        await self.load_extension("cogs.tournament")
+
+        print("✅ Cogs chargés")
+
+    async def on_ready(self):
+        print(f"BOT CONNECTÉ : {self.user}")
+
 
 bot = MyBot()
 
 
-async def setup():
-    await bot.load_extension("cogs.registration")
-    await bot.load_extension("cogs.teams")
-    await bot.load_extension("cogs.payment")
-    await bot.load_extension("cogs.tournament")
-    print("✅ Cogs chargés")
-
-
-@bot.event
-async def on_ready():
-    print(f"BOT CONNECTÉ : {bot.user}")
-
-
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
-    bot.loop.create_task(setup())
     bot.run(DISCORD_TOKEN)
