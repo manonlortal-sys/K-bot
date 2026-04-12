@@ -7,9 +7,6 @@ class InscriptionView(discord.ui.View):
         super().__init__(timeout=None)
         self.sessions = {}
 
-    # =========================
-    # START
-    # =========================
     @discord.ui.button(
         label="🎮 Je participe",
         style=discord.ButtonStyle.success,
@@ -20,10 +17,7 @@ class InscriptionView(discord.ui.View):
         if len(interaction.client.teams) >= 8:
             return await interaction.response.send_message("❌ Tournoi complet", ephemeral=True)
 
-        self.sessions[interaction.user.id] = {
-            "joueurs": None,
-            "nom": None
-        }
+        self.sessions[interaction.user.id] = {"joueurs": None, "nom": None}
 
         await interaction.response.send_message(
             "👥 Envoie les 3 joueurs ici",
@@ -39,21 +33,16 @@ class InscriptionView(discord.ui.View):
 
         await self.ask_name(interaction)
 
-    # =========================
-    # STEP NAME
-    # =========================
     async def ask_name(self, interaction):
 
         view = NameView(self)
+
         await interaction.followup.send(
-            "🏷 Donne un nom d’équipe ou clique sur passer",
+            "🏷 Nom d’équipe ou passer",
             view=view,
             ephemeral=True
         )
 
-    # =========================
-    # RECAP
-    # =========================
     async def show_recap(self, interaction, user_id):
 
         session = self.sessions[user_id]
@@ -61,7 +50,7 @@ class InscriptionView(discord.ui.View):
         joueurs = session["joueurs"]
         nom = session["nom"]
 
-        display_name = nom or "Équipe auto"
+        name = nom or "Équipe auto"
 
         lines = []
         for i, p in enumerate(joueurs):
@@ -76,23 +65,19 @@ class InscriptionView(discord.ui.View):
             color=0x9b59b6
         )
 
-        embed.add_field(name="🏷 Nom", value=display_name, inline=False)
+        embed.add_field(name="🏷 Nom", value=name, inline=False)
 
         view = ConfirmView(self, user_id)
 
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
 
-# =========================
-# NAME STEP
-# =========================
 class NameView(discord.ui.View):
 
     def __init__(self, parent):
         super().__init__(timeout=60)
         self.parent = parent
 
-    # FIX IMPORTANT: PASSER
     @discord.ui.button(label="⏭ Passer", style=discord.ButtonStyle.secondary)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -102,7 +87,6 @@ class NameView(discord.ui.View):
 
         await self.parent.show_recap(interaction, interaction.user.id)
 
-    # RENOMMÉ
     @discord.ui.button(label="🏷 Inscrire nom", style=discord.ButtonStyle.primary)
     async def set_name(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -118,9 +102,6 @@ class NameView(discord.ui.View):
         await self.parent.show_recap(interaction, interaction.user.id)
 
 
-# =========================
-# CONFIRM
-# =========================
 class ConfirmView(discord.ui.View):
 
     def __init__(self, parent, user_id):
@@ -136,7 +117,8 @@ class ConfirmView(discord.ui.View):
         team = {
             "capitaine": session["joueurs"][0],
             "joueurs": session["joueurs"],
-            "nom": session["nom"]
+            "nom": session["nom"],
+            "paid": False
         }
 
         interaction.client.teams.append(team)
@@ -144,6 +126,29 @@ class ConfirmView(discord.ui.View):
         del self.parent.sessions[self.user_id]
 
         await interaction.response.send_message("✅ Équipe enregistrée", ephemeral=True)
+
+        # =========================
+        # MESSAGE SALON DISCUSSION
+        # =========================
+        channel = await interaction.client.fetch_channel(1492796809351925831)
+
+        embed = discord.Embed(
+            title="🏆 Inscription finalisée",
+            color=0x9b59b6
+        )
+
+        embed.add_field(name="🏷 Équipe", value=team["nom"] or "Équipe auto", inline=False)
+        embed.add_field(name="👑 Capitaine", value=team["joueurs"][0], inline=False)
+        embed.add_field(name="👥 Joueurs", value="\n".join(team["joueurs"]), inline=False)
+        embed.add_field(name="💳 Statut", value="⏳ En attente de paiement", inline=False)
+
+        view = PaymentView(team)
+
+        await channel.send(
+            content="<@&1489520344330145884>",
+            embed=embed,
+            view=view
+        )
 
         await interaction.client.update_teams_embed()
 
@@ -173,3 +178,27 @@ class ConfirmView(discord.ui.View):
             del self.parent.sessions[self.user_id]
 
         await interaction.response.send_message("❌ Annulé", ephemeral=True)
+
+
+class PaymentView(discord.ui.View):
+
+    def __init__(self, team):
+        super().__init__(timeout=None)
+        self.team = team
+
+    @discord.ui.button(label="Payé ✅", style=discord.ButtonStyle.success)
+    async def paid(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        role_id = 1489520344330145884
+
+        if role_id not in [r.id for r in interaction.user.roles]:
+            return await interaction.response.send_message(
+                "❌ réservé aux organisateurs",
+                ephemeral=True
+            )
+
+        self.team["paid"] = True
+
+        await interaction.response.send_message("✅ Paiement validé", ephemeral=True)
+
+        await interaction.client.update_teams_embed()
