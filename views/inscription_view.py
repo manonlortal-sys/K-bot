@@ -13,12 +13,12 @@ class InscriptionView(discord.ui.View):
     async def participate(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.send_message(
-            "Envoie les 2 joueurs de ton équipe (séparés par espace)",
+            "Envoie les joueurs de ton équipe (séparés par espace)",
             ephemeral=True
         )
 
         def check(msg):
-            return msg.author.id == interaction.user.id and msg.channel.id == interaction.channel.id
+            return msg.author.id == interaction.user.id
 
         try:
             msg = await interaction.client.wait_for("message", timeout=120, check=check)
@@ -28,19 +28,15 @@ class InscriptionView(discord.ui.View):
         parts = msg.content.split()
 
         if len(parts) < 2:
-            return await interaction.followup.send("Il faut 2 joueurs minimum ❌", ephemeral=True)
+            return await interaction.followup.send("Minimum 2 joueurs ❌", ephemeral=True)
 
         team = {
             "capitaine": interaction.user.id,
-            "joueurs": parts[:2],
-            "validated": False
+            "joueurs": [interaction.user.id] + parts[:2]
         }
 
         interaction.client.teams.append(team)
 
-        await interaction.followup.send(
-            "Équipe enregistrée ✅",
-            ephemeral=True
-        )
+        await interaction.followup.send("Équipe enregistrée ✅", ephemeral=True)
 
         await interaction.client.update_teams_embed()
