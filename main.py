@@ -40,7 +40,7 @@ class MyBot(commands.Bot):
         channel = await self.fetch_channel(TEAMS_CHANNEL)
 
         embed = discord.Embed(
-            title="🏆 TOURNOI - ÉQUIPES",
+            title="🏆 TOURNOI - ÉQUIPES INSCRITES",
             color=0x9b59b6
         )
 
@@ -49,18 +49,13 @@ class MyBot(commands.Bot):
         else:
             for i, t in enumerate(self.teams, 1):
 
-                # CLEAN DISPLAY (ANTI @@ + PAS DE < > BRUT)
                 captain = f"<@{t['capitaine']}>"
-
-                players = []
-                for p in t["joueurs"]:
-                    players.append(f"<@{p}>")
-
-                players_text = " • ".join(players)
+                players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
+                name = t.get("nom", f"Équipe {i}")
 
                 embed.add_field(
-                    name=f"⚔️ Équipe {i}",
-                    value=f"👑 Capitaine : {captain}\n👥 Joueurs : {players_text}",
+                    name=f"⚔️ {name}",
+                    value=f"👑 Capitaine : {captain}\n👥 Joueurs : {players}",
                     inline=False
                 )
 
