@@ -7,13 +7,13 @@ class InscriptionView(discord.ui.View):
 
     @discord.ui.button(
         label="Je participe",
-        style=discord.ButtonStyle.green,
+        style=discord.ButtonStyle.success,
         custom_id="tournoi:participate"
     )
     async def participate(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.send_message(
-            "Envoie les joueurs de ton équipe (séparés par espace)",
+            "Envoie les joueurs de ton équipe (séparés par espace ou mentions)",
             ephemeral=True
         )
 
