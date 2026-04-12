@@ -12,12 +12,12 @@ class RegistrationView(discord.ui.View):
     @discord.ui.button(label="🎮 Je participe", style=discord.ButtonStyle.success)
     async def start(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        if len(interaction.client.teams) >= 8:
+            return await interaction.response.send_message("❌ Tournoi complet", ephemeral=True)
+
         self.sessions[interaction.user.id] = {"joueurs": None, "nom": None}
 
-        await interaction.response.send_message(
-            "👥 Envoie les 3 joueurs ici",
-            ephemeral=True
-        )
+        await interaction.response.send_message("👥 Envoie les 3 joueurs", ephemeral=True)
 
         def check(m):
             return m.author.id == interaction.user.id and m.channel.id == interaction.channel.id
@@ -31,11 +31,7 @@ class RegistrationView(discord.ui.View):
     async def ask_name(self, interaction):
 
         view = NameView(self)
-        await interaction.followup.send(
-            "🏷 Nom d’équipe ou passer",
-            view=view,
-            ephemeral=True
-        )
+        await interaction.followup.send("🏷 Nom d’équipe ou passer", view=view, ephemeral=True)
 
     async def recap(self, interaction, uid):
 
@@ -62,7 +58,6 @@ class NameView(discord.ui.View):
 
     @discord.ui.button(label="⏭ Passer", style=discord.ButtonStyle.secondary)
     async def skip(self, interaction, button):
-
         await interaction.response.defer()
         self.parent.sessions[interaction.user.id]["nom"] = None
         await self.parent.recap(interaction, interaction.user.id)
@@ -78,13 +73,14 @@ class NameView(discord.ui.View):
         msg = await interaction.client.wait_for("message", check=check)
 
         self.parent.sessions[interaction.user.id]["nom"] = msg.content
+
         await self.parent.recap(interaction, interaction.user.id)
 
 
 class ConfirmView(discord.ui.View):
 
     def __init__(self, parent, uid):
-        super().__init__()
+        super().__init__(timeout=120)
         self.parent = parent
         self.uid = uid
 
@@ -103,9 +99,18 @@ class ConfirmView(discord.ui.View):
 
         del self.parent.sessions[self.uid]
 
-        await interaction.response.send_message("✅ OK", ephemeral=True)
+        await interaction.response.send_message("✅ Équipe enregistrée", ephemeral=True)
 
-        await self.cog.update_teams_embed()
+        # message paiement
+        payment_cog = interaction.client.get_cog("PaymentCog")
+        if payment_cog:
+            channel = await interaction.client.fetch_channel(1492796809351925831)
+            await payment_cog.send_payment_message(team, channel)
+
+        # update embed
+        teams_cog = interaction.client.get_cog("TeamsCog")
+        if teams_cog:
+            await teams_cog.update_teams_embed()
 
 
 class RegistrationCog(commands.Cog):
