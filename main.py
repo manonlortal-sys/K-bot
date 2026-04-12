@@ -23,54 +23,58 @@ def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
 # =========================
-# BOT
+# BOT CLASS (FIX PROPRE)
 # =========================
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.members = True
+        super().__init__(command_prefix="!", intents=intents, help_command=None)
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+        self.teams = []
+        self.teams_message_id = None
 
-bot.teams = []
-bot.teams_message_id = None
+    # 🔥 ICI la fonction devient 100% sûre
+    async def update_teams_embed(self):
+
+        channel = await self.fetch_channel(TEAMS_CHANNEL)
+
+        embed = discord.Embed(
+            title="🏆 TOURNOI - ÉQUIPES",
+            color=0x9b59b6
+        )
+
+        if len(self.teams) == 0:
+            embed.description = "Aucune équipe"
+        else:
+            for i, t in enumerate(self.teams, 1):
+                players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
+
+                embed.add_field(
+                    name=f"⚔️ Équipe {i}",
+                    value=f"👑 <@{t['capitaine']}>\n👥 {players}",
+                    inline=False
+                )
+
+        if self.teams_message_id is None:
+            msg = await channel.send(embed=embed)
+            self.teams_message_id = msg.id
+        else:
+            msg = await channel.fetch_message(self.teams_message_id)
+            await msg.edit(embed=embed)
 
 # =========================
-# EMBED UPDATE (SAFE)
+# BOT INSTANCE
 # =========================
-async def update_teams_embed():
-    channel = await bot.fetch_channel(TEAMS_CHANNEL)
-
-    embed = discord.Embed(
-        title="🏆 TOURNOI - ÉQUIPES INSCRITES",
-        color=0x9b59b6
-    )
-
-    if len(bot.teams) == 0:
-        embed.description = "Aucune équipe pour le moment ⏳"
-    else:
-        for i, t in enumerate(bot.teams, 1):
-            players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
-
-            embed.add_field(
-                name=f"⚔️ Équipe {i}",
-                value=f"👑 <@{t['capitaine']}>\n👥 {players}",
-                inline=False
-            )
-
-    # PREMIÈRE FOIS → créer message
-    if bot.teams_message_id is None:
-        msg = await channel.send(embed=embed)
-        bot.teams_message_id = msg.id
-    else:
-        msg = await channel.fetch_message(bot.teams_message_id)
-        await msg.edit(embed=embed)
+bot = MyBot()
 
 # =========================
 # READY
 # =========================
 @bot.event
 async def on_ready():
-    print("Bot ready")
+    print("BOT READY")
 
     channel = await bot.fetch_channel(INSCRIPTION_CHANNEL)
 
@@ -82,7 +86,7 @@ async def on_ready():
 
     await channel.send(embed=embed, view=InscriptionView())
 
-    await update_teams_embed()
+    await bot.update_teams_embed()
 
 # =========================
 # START
