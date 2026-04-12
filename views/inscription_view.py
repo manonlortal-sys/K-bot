@@ -13,7 +13,7 @@ class InscriptionView(discord.ui.View):
     async def participate(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.send_message(
-            "Envoie les 2 joueurs de ton équipe (mention @ ou pseudo, séparés par espace)",
+            "Envoie les 2 joueurs de ton équipe",
             ephemeral=True
         )
 
@@ -28,22 +28,27 @@ class InscriptionView(discord.ui.View):
         parts = msg.content.split()
 
         if len(parts) < 2:
-            return await interaction.followup.send(
-                "Tu dois fournir 2 joueurs minimum ❌",
-                ephemeral=True
-            )
+            return await interaction.followup.send("2 joueurs minimum ❌", ephemeral=True)
 
         team = {
             "capitaine": interaction.user.id,
-            "joueurs": [interaction.user.id],
-            "raw_players": parts[:2],
-            "nom": None,
+            "joueurs": parts[:2],
             "validated": False
         }
 
         interaction.client.teams.append(team)
 
         await interaction.followup.send(
-            "Équipe enregistrée ✅\nAttends validation des organisateurs.",
+            "Équipe enregistrée ✅ (en attente validation)",
             ephemeral=True
         )
+
+        # update embed live
+        await interaction.client.loop.create_task(
+            update_teams(interaction.client)
+        )
+
+
+async def update_teams(client):
+    from main import update_teams_embed
+    await update_teams_embed()
