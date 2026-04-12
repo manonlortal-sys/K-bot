@@ -18,8 +18,11 @@ class InscriptionView(discord.ui.View):
                 ephemeral=True
             )
 
+        # =========================
+        # ETAPE 1 : JOUEURS
+        # =========================
         await interaction.response.send_message(
-            "Envoie dans cet ordre :\n1️⃣ Nom d’équipe\n2️⃣ Joueurs (séparés par espace)",
+            "Envoie les 3 joueurs de ton équipe (séparés par espace)",
             ephemeral=True
         )
 
@@ -32,13 +35,30 @@ class InscriptionView(discord.ui.View):
 
         if len(parts) < 3:
             return await interaction.followup.send(
-                "Format invalide ❌ (nom + au moins 2 joueurs)",
+                "❌ Il faut exactement 3 joueurs",
                 ephemeral=True
             )
 
-        team_name = parts[0]
-        players = parts[1:3]
+        players = parts[:3]
 
+        # =========================
+        # ETAPE 2 : NOM ÉQUIPE
+        # =========================
+        await interaction.followup.send(
+            "Donne un nom d’équipe (ou écris `skip` pour nom automatique)",
+            ephemeral=True
+        )
+
+        msg2 = await interaction.client.wait_for("message", timeout=120, check=check)
+
+        if msg2.content.lower() == "skip":
+            team_name = None
+        else:
+            team_name = msg2.content.strip()
+
+        # =========================
+        # CREATION TEAM
+        # =========================
         team = {
             "capitaine": interaction.user.id,
             "joueurs": [interaction.user.id] + players,
