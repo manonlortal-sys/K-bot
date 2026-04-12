@@ -40,7 +40,7 @@ class TeamsCog(commands.Cog):
 
                 embed.add_field(
                     name=f"⚔️ {name}",
-                    value="\n".join(players) + f"\n💳 {status}",
+                    value="\n".join(players) + f"\n💳 {status}\n",
                     inline=False
                 )
 
@@ -51,6 +51,8 @@ class TeamsCog(commands.Cog):
             msg = await channel.fetch_message(self.bot.teams_message_id)
             await msg.edit(embed=embed)
 
-
-async def setup(bot):
-    await bot.add_cog(TeamsCog(bot))
+        # 🔥 fermeture auto
+        if len(self.bot.teams) == 8:
+            cog = self.bot.get_cog("TournamentCog")
+            if cog and not cog.closed:
+                await cog.close_registration()
