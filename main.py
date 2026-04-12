@@ -32,9 +32,10 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 bot.teams = []
+bot.teams_message = None
 
 # =========================
-# EMBED TEAMS
+# EMBED UPDATE (UN SEUL MESSAGE)
 # =========================
 async def update_teams_embed():
     channel = bot.get_channel(TEAMS_CHANNEL)
@@ -43,29 +44,29 @@ async def update_teams_embed():
         return
 
     embed = discord.Embed(
-        title="ÉQUIPES DU TOURNOI",
+        title="🏆 TOURNOI - ÉQUIPES INSCRITES",
         color=0x9b59b6
     )
 
     if len(bot.teams) == 0:
-        embed.description = "Aucune équipe inscrite."
+        embed.description = "Aucune équipe pour le moment ⏳"
     else:
         for i, t in enumerate(bot.teams, 1):
 
-            joueurs = t.get("joueurs", [])
-
-            # format affichage joueurs
-            joueurs_txt = "\n".join([f"<@{j}>" for j in joueurs])
+            captain = f"<@{t['capitaine']}>"
+            players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
 
             embed.add_field(
-                name=f"Équipe {i}",
-                value=f"Capitaine: <@{t['capitaine']}>\nJoueurs:\n{joueurs_txt}",
+                name=f"⚔️ Équipe {i}",
+                value=f"👑 Capitaine : {captain}\n👥 Joueurs : {players}",
                 inline=False
             )
 
-    await channel.send(embed=embed)
-
-bot.update_teams_embed = update_teams_embed
+    # SI PREMIÈRE FOIS → envoie message
+    if bot.teams_message is None:
+        bot.teams_message = await channel.send(embed=embed)
+    else:
+        await bot.teams_message.edit(embed=embed)
 
 # =========================
 # READY
@@ -76,14 +77,14 @@ async def on_ready():
 
     if channel:
         embed = discord.Embed(
-            title="TOURNOI DOFUS TOUCH",
-            description="Clique sur Je participe",
+            title="🎮 TOURNOI DOFUS TOUCH",
+            description="Clique sur **Je participe** pour créer ton équipe",
             color=0x9b59b6
         )
 
         await channel.send(embed=embed, view=InscriptionView())
 
-    await bot.update_teams_embed()
+    await update_teams_embed()
 
 # =========================
 # START
