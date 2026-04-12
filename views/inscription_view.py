@@ -28,22 +28,21 @@ class InscriptionView(discord.ui.View):
             return await interaction.followup.send("Minimum 2 joueurs ❌", ephemeral=True)
 
         user_id = interaction.user.id
+
         is_organizer = any(role.id == 1489520344330145884 for role in interaction.user.roles)
 
-        # cas organisateur
+        # LIMIT 8 TEAMS
+        if len(interaction.client.teams) >= 8:
+            return await interaction.followup.send("Tournoi complet ❌", ephemeral=True)
+
+        # ORGANISATEUR
         if is_organizer:
-            players = parts[:3]  # il peut inscrire jusqu'à 3 joueurs
-
-            # conversion propre (on garde tout tel quel, mais on check si l'orga est dedans)
-            # si l'orga se mentionne => il devient joueur normal de l'équipe
-            team_players = players
-
             team = {
-                "capitaine": team_players[0],
-                "joueurs": team_players
+                "capitaine": parts[0],
+                "joueurs": parts[:3]
             }
 
-        # cas joueur normal
+        # JOUEUR NORMAL
         else:
             team = {
                 "capitaine": user_id,
