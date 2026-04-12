@@ -49,9 +49,10 @@ class MyBot(commands.Bot):
         else:
             for i, t in enumerate(self.teams, 1):
 
+                name = t.get("nom") or f"Équipe {i}"
+
                 captain = f"<@{t['capitaine']}>"
                 players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
-                name = t.get("nom", f"Équipe {i}")
 
                 embed.add_field(
                     name=f"⚔️ {name}",
