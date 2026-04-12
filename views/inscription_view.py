@@ -20,15 +20,9 @@ class InscriptionView(discord.ui.View):
         def check(msg):
             return msg.author.id == interaction.user.id
 
-        try:
-            msg = await interaction.client.wait_for("message", timeout=120, check=check)
-        except:
-            return await interaction.followup.send("Temps écoulé ❌", ephemeral=True)
+        msg = await interaction.client.wait_for("message", timeout=120, check=check)
 
         parts = msg.content.split()
-
-        if len(parts) < 2:
-            return await interaction.followup.send("Minimum 2 joueurs ❌", ephemeral=True)
 
         team = {
             "capitaine": interaction.user.id,
