@@ -3,12 +3,11 @@ import threading
 import discord
 from discord.ext import commands
 
-from config import DISCORD_TOKEN, INSCRIPTION_CHANNEL, TEAMS_CHANNEL
+from config import DISCORD_TOKEN
 from web.flask_app import app
-from views.inscription_view import InscriptionView
 
 # =========================
-# FIX AUDIOOP
+# AUDIOOP FIX (Render)
 # =========================
 try:
     import audioop
@@ -32,69 +31,25 @@ class MyBot(commands.Bot):
 
         self.teams = []
         self.teams_message_id = None
-        self.max_teams = 8
-
-    async def update_teams_embed(self):
-
-        channel = await self.fetch_channel(TEAMS_CHANNEL)
-
-        embed = discord.Embed(
-            title="🏆 TOURNOI DOFUS TOUCH",
-            description="Équipes inscrites",
-            color=0x9b59b6
-        )
-
-        if not self.teams:
-            embed.add_field(name="📭", value="Aucune équipe", inline=False)
-        else:
-            for i, t in enumerate(self.teams, 1):
-
-                name = t.get("nom") or f"Équipe {i}"
-
-                lines = []
-                for idx, p in enumerate(t["joueurs"]):
-                    if idx == 0:
-                        lines.append(f"👑 {p} (C)")
-                    else:
-                        lines.append(f"👤 {p}")
-
-                status = "⏳ En attente de paiement"
-                if t.get("paid"):
-                    status = "✅ Inscription payée"
-
-                embed.add_field(
-                    name=f"⚔️ {name}",
-                    value="\n".join(lines) + f"\n\n💳 {status}",
-                    inline=False
-                )
-
-        if self.teams_message_id is None:
-            msg = await channel.send(embed=embed)
-            self.teams_message_id = msg.id
-        else:
-            msg = await channel.fetch_message(self.teams_message_id)
-            await msg.edit(embed=embed)
 
 
 bot = MyBot()
 
 
+async def setup():
+    await bot.load_extension("cogs.registration")
+    await bot.load_extension("cogs.teams")
+    await bot.load_extension("cogs.payment")
+    await bot.load_extension("cogs.tournament")
+    print("✅ Cogs chargés")
+
+
 @bot.event
 async def on_ready():
-
-    channel = await bot.fetch_channel(INSCRIPTION_CHANNEL)
-
-    embed = discord.Embed(
-        title="🎮 INSCRIPTION TOURNOI",
-        description="Clique pour créer ton équipe",
-        color=0x9b59b6
-    )
-
-    await channel.send(embed=embed, view=InscriptionView())
-
-    await bot.update_teams_embed()
+    print(f"BOT CONNECTÉ : {bot.user}")
 
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
+    bot.loop.create_task(setup())
     bot.run(DISCORD_TOKEN)
