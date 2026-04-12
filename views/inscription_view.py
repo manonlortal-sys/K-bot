@@ -13,12 +13,12 @@ class InscriptionView(View):
         user = interaction.user
 
         if tournament["phase"] != "signup":
-            return await interaction.response.send_message(
-                "❌ Les inscriptions sont fermées.",
-                ephemeral=True
-            )
+            return await interaction.response.send_message("❌ Fermé.", ephemeral=True)
 
-        # création équipe temporaire (step 1)
+        for team in tournament["teams"]:
+            if team["captain_id"] == user.id:
+                return await interaction.response.send_message("❌ Déjà une équipe.", ephemeral=True)
+
         team = {
             "id": str(user.id),
             "name": None,
@@ -28,8 +28,4 @@ class InscriptionView(View):
 
         tournament["teams"].append(team)
 
-        await interaction.response.send_message(
-            "👥 Donne maintenant les joueurs de ton équipe (format libre).\n"
-            "Ex: @user1 @user2 ou pseudos séparés",
-            ephemeral=True
-        )
+        await interaction.response.send_message("👥 Équipe créée.", ephemeral=True)
