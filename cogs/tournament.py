@@ -11,35 +11,36 @@ class TournamentCog(commands.Cog):
 
     async def close_registration(self):
 
-        channel = await self.bot.fetch_channel(self.bot.TEAMS_CHANNEL)
+        self.closed = True
+
+        channel = await self.bot.fetch_channel(1492796809351925831)
 
         embed = discord.Embed(
-            title="🚨 INSCRIPTIONS CLÔTURÉES",
-            description="8 équipes atteintes",
+            title="🚨 Inscriptions clôturées",
+            description="Merci d’attribuer le rôle participant à tous les joueurs",
             color=0xff0000
         )
 
         view = TournamentView(self)
 
-        await channel.send(embed=embed, view=view)
+        await channel.send(
+            content="<@&1489520344330145884>",
+            embed=embed,
+            view=view
+        )
 
     def generate_bracket(self):
 
         teams = self.bot.teams[:]
         random.shuffle(teams)
 
-        return [
-            (teams[0], teams[1]),
-            (teams[2], teams[3]),
-            (teams[4], teams[5]),
-            (teams[6], teams[7])
-        ]
+        return [(teams[i], teams[i+1]) for i in range(0, 8, 2)]
 
 
 class TournamentView(discord.ui.View):
 
     def __init__(self, cog):
-        super().__init__()
+        super().__init__(timeout=None)
         self.cog = cog
 
     @discord.ui.button(label="🎲 Lancer le tirage", style=discord.ButtonStyle.primary)
@@ -48,12 +49,12 @@ class TournamentView(discord.ui.View):
         role_id = 1489520344330145884
 
         if role_id not in [r.id for r in interaction.user.roles]:
-            return await interaction.response.send_message("❌ orga only", ephemeral=True)
+            return await interaction.response.send_message("❌ réservé aux organisateurs", ephemeral=True)
 
         bracket = self.cog.generate_bracket()
 
         embed = discord.Embed(
-            title="🎲 MATCHS",
+            title="🎲 Tirage des matchs",
             color=0x9b59b6
         )
 
@@ -61,11 +62,15 @@ class TournamentView(discord.ui.View):
 
             embed.add_field(
                 name=f"🔥 MATCH {i}",
-                value=f"{a['nom'] or 'Team'}\nVS\n{b['nom'] or 'Team'}",
+                value=f"{a['nom'] or 'Équipe'}\nVS\n{b['nom'] or 'Équipe'}",
                 inline=False
             )
 
-        await interaction.response.send_message(embed=embed)
+        channel = await interaction.client.fetch_channel(interaction.client.TEAMS_CHANNEL)
+
+        await channel.send(embed=embed)
+
+        await interaction.response.send_message("✅ Tirage effectué", ephemeral=True)
 
 
 async def setup(bot):
