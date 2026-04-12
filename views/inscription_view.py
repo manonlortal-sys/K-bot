@@ -8,7 +8,7 @@ class InscriptionView(discord.ui.View):
         self.sessions = {}
 
     # =========================
-    # BUTTON START
+    # START
     # =========================
     @discord.ui.button(
         label="🎮 Je participe",
@@ -26,7 +26,7 @@ class InscriptionView(discord.ui.View):
         }
 
         await interaction.response.send_message(
-            "👥 Envoie les 3 joueurs de ton équipe ici",
+            "👥 Envoie les 3 joueurs ici",
             ephemeral=True
         )
 
@@ -35,9 +35,7 @@ class InscriptionView(discord.ui.View):
 
         msg = await interaction.client.wait_for("message", check=check, timeout=120)
 
-        players = msg.content.split()[:3]
-
-        self.sessions[interaction.user.id]["joueurs"] = players
+        self.sessions[interaction.user.id]["joueurs"] = msg.content.split()[:3]
 
         await self.ask_name(interaction)
 
@@ -54,30 +52,31 @@ class InscriptionView(discord.ui.View):
         )
 
     # =========================
-    # RECAP + FINAL
+    # RECAP
     # =========================
     async def show_recap(self, interaction, user_id):
 
         session = self.sessions[user_id]
+
         joueurs = session["joueurs"]
         nom = session["nom"]
 
-        name = nom or "Équipe auto"
+        display_name = nom or "Équipe auto"
 
-        text = []
+        lines = []
         for i, p in enumerate(joueurs):
             if i == 0:
-                text.append(f"👑 {p} (C)")
+                lines.append(f"👑 {p} (C)")
             else:
-                text.append(f"👤 {p}")
+                lines.append(f"👤 {p}")
 
         embed = discord.Embed(
             title="📋 Récap équipe",
-            description="\n".join(text),
+            description="\n".join(lines),
             color=0x9b59b6
         )
 
-        embed.add_field(name="🏷 Nom", value=name, inline=False)
+        embed.add_field(name="🏷 Nom", value=display_name, inline=False)
 
         view = ConfirmView(self, user_id)
 
@@ -85,7 +84,7 @@ class InscriptionView(discord.ui.View):
 
 
 # =========================
-# NAME BUTTON VIEW
+# NAME STEP
 # =========================
 class NameView(discord.ui.View):
 
@@ -93,20 +92,21 @@ class NameView(discord.ui.View):
         super().__init__(timeout=60)
         self.parent = parent
 
+    # FIX IMPORTANT: PASSER
     @discord.ui.button(label="⏭ Passer", style=discord.ButtonStyle.secondary)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.defer(ephemeral=True)
 
         self.parent.sessions[interaction.user.id]["nom"] = None
 
         await self.parent.show_recap(interaction, interaction.user.id)
 
-    @discord.ui.button(label="🏷 Valider nom", style=discord.ButtonStyle.primary)
+    # RENOMMÉ
+    @discord.ui.button(label="🏷 Inscrire nom", style=discord.ButtonStyle.primary)
     async def set_name(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.send_message(
-            "Envoie le nom de ton équipe",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Envoie le nom", ephemeral=True)
 
         def check(msg):
             return msg.author.id == interaction.user.id and msg.channel.id == interaction.channel.id
@@ -119,7 +119,7 @@ class NameView(discord.ui.View):
 
 
 # =========================
-# CONFIRM VIEW
+# CONFIRM
 # =========================
 class ConfirmView(discord.ui.View):
 
@@ -150,10 +150,7 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="✏️ Modifier joueurs", style=discord.ButtonStyle.primary)
     async def edit_players(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.send_message(
-            "👥 Renvoie les 3 joueurs",
-            ephemeral=True
-        )
+        await interaction.response.send_message("👥 Renvoie les 3 joueurs", ephemeral=True)
 
         def check(msg):
             return msg.author.id == self.user_id and msg.channel.id == interaction.channel.id
@@ -175,4 +172,4 @@ class ConfirmView(discord.ui.View):
         if self.user_id in self.parent.sessions:
             del self.parent.sessions[self.user_id]
 
-        await interaction.response.send_message("❌ Inscription annulée", ephemeral=True)
+        await interaction.response.send_message("❌ Annulé", ephemeral=True)
