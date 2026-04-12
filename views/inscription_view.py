@@ -12,8 +12,14 @@ class InscriptionView(discord.ui.View):
     )
     async def participate(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        if len(interaction.client.teams) >= 8:
+            return await interaction.response.send_message(
+                "Tournoi complet ❌",
+                ephemeral=True
+            )
+
         await interaction.response.send_message(
-            "Envoie les joueurs de ton équipe (séparés par espace)",
+            "Envoie dans cet ordre :\n1️⃣ Nom d’équipe\n2️⃣ Joueurs (séparés par espace)",
             ephemeral=True
         )
 
@@ -24,30 +30,20 @@ class InscriptionView(discord.ui.View):
 
         parts = msg.content.split()
 
-        if len(parts) < 2:
-            return await interaction.followup.send("Minimum 2 joueurs ❌", ephemeral=True)
+        if len(parts) < 3:
+            return await interaction.followup.send(
+                "Format invalide ❌ (nom + au moins 2 joueurs)",
+                ephemeral=True
+            )
 
-        user_id = interaction.user.id
+        team_name = parts[0]
+        players = parts[1:3]
 
-        is_organizer = any(role.id == 1489520344330145884 for role in interaction.user.roles)
-
-        # LIMIT 8 TEAMS
-        if len(interaction.client.teams) >= 8:
-            return await interaction.followup.send("Tournoi complet ❌", ephemeral=True)
-
-        # ORGANISATEUR
-        if is_organizer:
-            team = {
-                "capitaine": parts[0],
-                "joueurs": parts[:3]
-            }
-
-        # JOUEUR NORMAL
-        else:
-            team = {
-                "capitaine": user_id,
-                "joueurs": [user_id] + parts[:2]
-            }
+        team = {
+            "capitaine": interaction.user.id,
+            "joueurs": [interaction.user.id] + players,
+            "nom": team_name
+        }
 
         interaction.client.teams.append(team)
 
