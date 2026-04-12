@@ -1,6 +1,9 @@
 import discord
 from discord.ui import View, button
+
 from core.state import tournament
+from utils.validators import parse_players
+from services.team_service import create_team
 
 class InscriptionView(View):
 
@@ -19,13 +22,18 @@ class InscriptionView(View):
             if team["captain_id"] == user.id:
                 return await interaction.response.send_message("❌ Déjà une équipe.", ephemeral=True)
 
-        team = {
-            "id": str(user.id),
-            "name": None,
-            "captain_id": user.id,
-            "players": [user.id]
-        }
+        await interaction.response.send_message(
+            "👥 Envoie les joueurs (mentions ou pseudos, max 2).",
+            ephemeral=True
+        )
 
-        tournament["teams"].append(team)
+        def check(m):
+            return m.author.id == user.id
 
-        await interaction.response.send_message("👥 Équipe créée.", ephemeral=True)
+        msg = await interaction.client.wait_for("message", check=check)
+
+        players = parse_players(msg.content)
+
+        team = create_team(user.id, players)
+
+        await interaction.followup.send("✅ Équipe créée.")
