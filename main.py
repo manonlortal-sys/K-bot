@@ -34,13 +34,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 bot.teams = []
 
 # =========================
-# EMBED FUNCTION
+# EMBED TEAMS
 # =========================
 async def update_teams_embed():
     channel = bot.get_channel(TEAMS_CHANNEL)
 
     if not channel:
-        print("Salon teams introuvable")
         return
 
     embed = discord.Embed(
@@ -52,15 +51,20 @@ async def update_teams_embed():
         embed.description = "Aucune équipe inscrite."
     else:
         for i, t in enumerate(bot.teams, 1):
+
+            joueurs = t.get("joueurs", [])
+
+            # format affichage joueurs
+            joueurs_txt = "\n".join([f"<@{j}>" for j in joueurs])
+
             embed.add_field(
                 name=f"Équipe {i}",
-                value=f"Capitaine: <@{t['capitaine']}>",
+                value=f"Capitaine: <@{t['capitaine']}>\nJoueurs:\n{joueurs_txt}",
                 inline=False
             )
 
     await channel.send(embed=embed)
 
-# 🔥 ATTACHE LA FONCTION AU BOT (IMPORTANT)
 bot.update_teams_embed = update_teams_embed
 
 # =========================
@@ -68,8 +72,6 @@ bot.update_teams_embed = update_teams_embed
 # =========================
 @bot.event
 async def on_ready():
-    print(f"Bot connecté: {bot.user}")
-
     channel = bot.get_channel(INSCRIPTION_CHANNEL)
 
     if channel:
