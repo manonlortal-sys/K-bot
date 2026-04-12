@@ -8,7 +8,7 @@ from web.flask_app import app
 from views.inscription_view import InscriptionView
 
 # =========================
-# AUDIOOP FIX
+# FIX AUDIOOP
 # =========================
 try:
     import audioop
@@ -22,19 +22,18 @@ def run_flask():
 
 
 class MyBot(commands.Bot):
+
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
+
         super().__init__(command_prefix="!", intents=intents)
 
         self.teams = []
         self.teams_message_id = None
         self.max_teams = 8
 
-    # =========================
-    # CLEAN EMBED
-    # =========================
     async def update_teams_embed(self):
 
         channel = await self.fetch_channel(TEAMS_CHANNEL)
@@ -59,9 +58,13 @@ class MyBot(commands.Bot):
                     else:
                         lines.append(f"👤 {p}")
 
+                status = "⏳ En attente de paiement"
+                if t.get("paid"):
+                    status = "✅ Inscription payée"
+
                 embed.add_field(
                     name=f"⚔️ {name}",
-                    value="\n".join(lines),
+                    value="\n".join(lines) + f"\n\n💳 {status}",
                     inline=False
                 )
 
@@ -76,12 +79,8 @@ class MyBot(commands.Bot):
 bot = MyBot()
 
 
-# =========================
-# READY
-# =========================
 @bot.event
 async def on_ready():
-    print("BOT READY")
 
     channel = await bot.fetch_channel(INSCRIPTION_CHANNEL)
 
@@ -96,9 +95,6 @@ async def on_ready():
     await bot.update_teams_embed()
 
 
-# =========================
-# START
-# =========================
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     bot.run(DISCORD_TOKEN)
