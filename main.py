@@ -3,18 +3,12 @@ import threading
 import discord
 from discord.ext import commands
 
-from config import (
-    DISCORD_TOKEN,
-    INSCRIPTION_CHANNEL,
-    TEAMS_CHANNEL,
-    ROLE_ORGA
-)
-
+from config import DISCORD_TOKEN, INSCRIPTION_CHANNEL, TEAMS_CHANNEL
 from web.flask_app import app
 from views.inscription_view import InscriptionView
 
 # =========================
-# AUDIOOP FIX (Python 3.13)
+# FIX AUDIOOP (Python 3.13)
 # =========================
 try:
     import audioop
@@ -40,31 +34,31 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 bot.teams = []
 
 # =========================
-# UPDATE EMBED TEAMS
+# UPDATE TEAMS EMBED (FIXÉ)
 # =========================
 async def update_teams_embed():
-    channel = bot.get_channel(TEAMS_CHANNEL)
-    if not channel:
-        return
+    try:
+        channel = await bot.fetch_channel(TEAMS_CHANNEL)
 
-    embed = discord.Embed(
-        title="ÉQUIPES INSCRITES",
-        color=0x9b59b6
-    )
+        embed = discord.Embed(
+            title="ÉQUIPES DU TOURNOI",
+            color=0x9b59b6
+        )
 
-    if not bot.teams:
-        embed.description = "Aucune équipe pour le moment."
-    else:
-        for i, t in enumerate(bot.teams, 1):
-            status = "✅ Validée" if t["validated"] else "⏳ En attente"
-            embed.add_field(
-                name=f"Équipe {i}",
-                value=f"{status}\nCapitaine: <@{t['capitaine']}>",
-                inline=False
-            )
+        if len(bot.teams) == 0:
+            embed.description = "Aucune équipe inscrite."
+        else:
+            for i, t in enumerate(bot.teams, 1):
+                embed.add_field(
+                    name=f"Équipe {i}",
+                    value=f"Capitaine: <@{t['capitaine']}>",
+                    inline=False
+                )
 
-    await channel.purge(limit=10)
-    await channel.send(embed=embed)
+        await channel.send(embed=embed)
+
+    except Exception as e:
+        print(f"Erreur update embed teams: {e}")
 
 # =========================
 # READY
@@ -83,21 +77,6 @@ async def on_ready():
         )
 
         await channel.send(embed=embed, view=InscriptionView())
-
-# =========================
-# VALIDATION COMMANDE
-# =========================
-@bot.command()
-async def valider(ctx, index: int):
-    if ROLE_ORGA not in [r.id for r in ctx.author.roles]:
-        return await ctx.send("❌ Pas autorisé")
-
-    if index < 1 or index > len(bot.teams):
-        return await ctx.send("❌ Index invalide")
-
-    bot.teams[index - 1]["validated"] = True
-
-    await ctx.send(f"Équipe {index} validée ✅")
 
     await update_teams_embed()
 
