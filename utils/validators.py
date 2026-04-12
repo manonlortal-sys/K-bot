@@ -1,2 +1,11 @@
-def is_already_captain(user_id, teams):
-    return any(team["captain_id"] == user_id for team in teams)
+import re
+
+def parse_players(content: str):
+    mentions = re.findall(r"<@!?(\d+)>", content)
+
+    cleaned = re.sub(r"<@!?(\d+)>", "", content)
+    raw = cleaned.split()
+
+    players = list(set(mentions + raw))
+
+    return players[:2]
