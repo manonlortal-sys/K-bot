@@ -40,23 +40,22 @@ class MyBot(commands.Bot):
         channel = await self.fetch_channel(TEAMS_CHANNEL)
 
         embed = discord.Embed(
-            title="🏆 TOURNOI - ÉQUIPES INSCRITES",
+            title="🏆 TOURNOI - ÉQUIPES",
             color=0x9b59b6
         )
 
-        if len(self.teams) == 0:
-            embed.description = "Aucune équipe pour le moment ⏳"
+        if not self.teams:
+            embed.description = "Aucune équipe"
         else:
             for i, t in enumerate(self.teams, 1):
 
                 name = t.get("nom") or f"Équipe {i}"
 
-                captain = f"<@{t['capitaine']}>"
                 players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
 
                 embed.add_field(
                     name=f"⚔️ {name}",
-                    value=f"👑 Capitaine : {captain}\n👥 Joueurs : {players}",
+                    value=f"👥 {players}",
                     inline=False
                 )
 
@@ -67,11 +66,9 @@ class MyBot(commands.Bot):
             msg = await channel.fetch_message(self.teams_message_id)
             await msg.edit(embed=embed)
 
+
 bot = MyBot()
 
-# =========================
-# READY
-# =========================
 @bot.event
 async def on_ready():
     print("BOT READY")
@@ -80,7 +77,7 @@ async def on_ready():
 
     embed = discord.Embed(
         title="🎮 TOURNOI DOFUS TOUCH",
-        description="Clique sur Je participe pour créer une équipe",
+        description="Clique sur le bouton pour t'inscrire",
         color=0x9b59b6
     )
 
@@ -88,9 +85,7 @@ async def on_ready():
 
     await bot.update_teams_embed()
 
-# =========================
-# START
-# =========================
+
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     bot.run(DISCORD_TOKEN)
