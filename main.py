@@ -49,13 +49,25 @@ class MyBot(commands.Bot):
         else:
             for i, t in enumerate(self.teams, 1):
 
-                name = t.get("nom") or f"Équipe {i}"
+                captain_id = t["capitaine"]
+                players = t["joueurs"]
 
-                players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
+                # affichage propre sans <> ni double @
+                formatted_players = []
+
+                for idx, p in enumerate(players):
+                    if idx == 0:
+                        formatted_players.append(f"(C) <@{p}>")
+                    else:
+                        formatted_players.append(f"<@{p}>")
+
+                players_text = ", ".join(formatted_players)
+
+                name = t.get("nom") or f"Équipe {i}"
 
                 embed.add_field(
                     name=f"⚔️ {name}",
-                    value=f"👥 {players}",
+                    value=players_text,
                     inline=False
                 )
 
@@ -69,6 +81,9 @@ class MyBot(commands.Bot):
 
 bot = MyBot()
 
+# =========================
+# READY
+# =========================
 @bot.event
 async def on_ready():
     print("BOT READY")
@@ -77,7 +92,7 @@ async def on_ready():
 
     embed = discord.Embed(
         title="🎮 TOURNOI DOFUS TOUCH",
-        description="Clique sur le bouton pour t'inscrire",
+        description="Clique pour t'inscrire",
         color=0x9b59b6
     )
 
