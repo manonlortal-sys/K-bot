@@ -13,7 +13,7 @@ class InscriptionView(discord.ui.View):
     async def participate(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.send_message(
-            "Envoie les joueurs de ton équipe (séparés par espace ou mentions)",
+            "Envoie les joueurs de ton équipe",
             ephemeral=True
         )
 
