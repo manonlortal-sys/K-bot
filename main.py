@@ -23,21 +23,20 @@ def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
 # =========================
-# BOT CLASS (FIX PROPRE)
+# BOT
 # =========================
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
-        super().__init__(command_prefix="!", intents=intents, help_command=None)
+        super().__init__(command_prefix="!", intents=intents)
 
         self.teams = []
         self.teams_message_id = None
+        self.max_teams = 8
 
-    # 🔥 ICI la fonction devient 100% sûre
     async def update_teams_embed(self):
-
         channel = await self.fetch_channel(TEAMS_CHANNEL)
 
         embed = discord.Embed(
@@ -46,14 +45,22 @@ class MyBot(commands.Bot):
         )
 
         if len(self.teams) == 0:
-            embed.description = "Aucune équipe"
+            embed.description = "Aucune équipe pour le moment ⏳"
         else:
             for i, t in enumerate(self.teams, 1):
-                players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
+
+                # CLEAN DISPLAY (ANTI @@ + PAS DE < > BRUT)
+                captain = f"<@{t['capitaine']}>"
+
+                players = []
+                for p in t["joueurs"]:
+                    players.append(f"<@{p}>")
+
+                players_text = " • ".join(players)
 
                 embed.add_field(
                     name=f"⚔️ Équipe {i}",
-                    value=f"👑 <@{t['capitaine']}>\n👥 {players}",
+                    value=f"👑 Capitaine : {captain}\n👥 Joueurs : {players_text}",
                     inline=False
                 )
 
@@ -64,9 +71,6 @@ class MyBot(commands.Bot):
             msg = await channel.fetch_message(self.teams_message_id)
             await msg.edit(embed=embed)
 
-# =========================
-# BOT INSTANCE
-# =========================
 bot = MyBot()
 
 # =========================
@@ -80,7 +84,7 @@ async def on_ready():
 
     embed = discord.Embed(
         title="🎮 TOURNOI DOFUS TOUCH",
-        description="Clique sur Je participe",
+        description="Clique sur Je participe pour créer une équipe",
         color=0x9b59b6
     )
 
