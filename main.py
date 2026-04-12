@@ -16,15 +16,11 @@ except ModuleNotFoundError:
     import audioop_lts as audioop
     sys.modules["audioop"] = audioop
 
-# =========================
-# FLASK
-# =========================
+
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
-# =========================
-# BOT
-# =========================
+
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -36,38 +32,36 @@ class MyBot(commands.Bot):
         self.teams_message_id = None
         self.max_teams = 8
 
+    # =========================
+    # CLEAN EMBED
+    # =========================
     async def update_teams_embed(self):
+
         channel = await self.fetch_channel(TEAMS_CHANNEL)
 
         embed = discord.Embed(
-            title="🏆 TOURNOI - ÉQUIPES",
+            title="🏆 TOURNOI DOFUS TOUCH",
+            description="Équipes inscrites",
             color=0x9b59b6
         )
 
         if not self.teams:
-            embed.description = "Aucune équipe"
+            embed.add_field(name="📭", value="Aucune équipe", inline=False)
         else:
             for i, t in enumerate(self.teams, 1):
 
-                captain_id = t["capitaine"]
-                players = t["joueurs"]
-
-                # affichage propre sans <> ni double @
-                formatted_players = []
-
-                for idx, p in enumerate(players):
-                    if idx == 0:
-                        formatted_players.append(f"(C) <@{p}>")
-                    else:
-                        formatted_players.append(f"<@{p}>")
-
-                players_text = ", ".join(formatted_players)
-
                 name = t.get("nom") or f"Équipe {i}"
+
+                lines = []
+                for idx, p in enumerate(t["joueurs"]):
+                    if idx == 0:
+                        lines.append(f"👑 {p} (C)")
+                    else:
+                        lines.append(f"👤 {p}")
 
                 embed.add_field(
                     name=f"⚔️ {name}",
-                    value=players_text,
+                    value="\n".join(lines),
                     inline=False
                 )
 
@@ -81,6 +75,7 @@ class MyBot(commands.Bot):
 
 bot = MyBot()
 
+
 # =========================
 # READY
 # =========================
@@ -91,8 +86,8 @@ async def on_ready():
     channel = await bot.fetch_channel(INSCRIPTION_CHANNEL)
 
     embed = discord.Embed(
-        title="🎮 TOURNOI DOFUS TOUCH",
-        description="Clique pour t'inscrire",
+        title="🎮 INSCRIPTION TOURNOI",
+        description="Clique pour créer ton équipe",
         color=0x9b59b6
     )
 
@@ -101,6 +96,9 @@ async def on_ready():
     await bot.update_teams_embed()
 
 
+# =========================
+# START
+# =========================
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     bot.run(DISCORD_TOKEN)
