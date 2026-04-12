@@ -8,7 +8,7 @@ from web.flask_app import app
 from views.inscription_view import InscriptionView
 
 # =========================
-# FIX AUDIOOP (Python 3.13)
+# AUDIOOP FIX
 # =========================
 try:
     import audioop
@@ -34,31 +34,34 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 bot.teams = []
 
 # =========================
-# UPDATE TEAMS EMBED (FIXÉ)
+# EMBED FUNCTION
 # =========================
 async def update_teams_embed():
-    try:
-        channel = await bot.fetch_channel(TEAMS_CHANNEL)
+    channel = bot.get_channel(TEAMS_CHANNEL)
 
-        embed = discord.Embed(
-            title="ÉQUIPES DU TOURNOI",
-            color=0x9b59b6
-        )
+    if not channel:
+        print("Salon teams introuvable")
+        return
 
-        if len(bot.teams) == 0:
-            embed.description = "Aucune équipe inscrite."
-        else:
-            for i, t in enumerate(bot.teams, 1):
-                embed.add_field(
-                    name=f"Équipe {i}",
-                    value=f"Capitaine: <@{t['capitaine']}>",
-                    inline=False
-                )
+    embed = discord.Embed(
+        title="ÉQUIPES DU TOURNOI",
+        color=0x9b59b6
+    )
 
-        await channel.send(embed=embed)
+    if len(bot.teams) == 0:
+        embed.description = "Aucune équipe inscrite."
+    else:
+        for i, t in enumerate(bot.teams, 1):
+            embed.add_field(
+                name=f"Équipe {i}",
+                value=f"Capitaine: <@{t['capitaine']}>",
+                inline=False
+            )
 
-    except Exception as e:
-        print(f"Erreur update embed teams: {e}")
+    await channel.send(embed=embed)
+
+# 🔥 ATTACHE LA FONCTION AU BOT (IMPORTANT)
+bot.update_teams_embed = update_teams_embed
 
 # =========================
 # READY
@@ -78,7 +81,7 @@ async def on_ready():
 
         await channel.send(embed=embed, view=InscriptionView())
 
-    await update_teams_embed()
+    await bot.update_teams_embed()
 
 # =========================
 # START
