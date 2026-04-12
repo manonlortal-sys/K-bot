@@ -32,16 +32,13 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 bot.teams = []
-bot.teams_message = None
+bot.teams_message_id = None
 
 # =========================
-# EMBED UPDATE (UN SEUL MESSAGE)
+# EMBED UPDATE (SAFE)
 # =========================
 async def update_teams_embed():
-    channel = bot.get_channel(TEAMS_CHANNEL)
-
-    if not channel:
-        return
+    channel = await bot.fetch_channel(TEAMS_CHANNEL)
 
     embed = discord.Embed(
         title="🏆 TOURNOI - ÉQUIPES INSCRITES",
@@ -52,37 +49,38 @@ async def update_teams_embed():
         embed.description = "Aucune équipe pour le moment ⏳"
     else:
         for i, t in enumerate(bot.teams, 1):
-
-            captain = f"<@{t['capitaine']}>"
             players = " • ".join([f"<@{p}>" for p in t["joueurs"]])
 
             embed.add_field(
                 name=f"⚔️ Équipe {i}",
-                value=f"👑 Capitaine : {captain}\n👥 Joueurs : {players}",
+                value=f"👑 <@{t['capitaine']}>\n👥 {players}",
                 inline=False
             )
 
-    # SI PREMIÈRE FOIS → envoie message
-    if bot.teams_message is None:
-        bot.teams_message = await channel.send(embed=embed)
+    # PREMIÈRE FOIS → créer message
+    if bot.teams_message_id is None:
+        msg = await channel.send(embed=embed)
+        bot.teams_message_id = msg.id
     else:
-        await bot.teams_message.edit(embed=embed)
+        msg = await channel.fetch_message(bot.teams_message_id)
+        await msg.edit(embed=embed)
 
 # =========================
 # READY
 # =========================
 @bot.event
 async def on_ready():
-    channel = bot.get_channel(INSCRIPTION_CHANNEL)
+    print("Bot ready")
 
-    if channel:
-        embed = discord.Embed(
-            title="🎮 TOURNOI DOFUS TOUCH",
-            description="Clique sur **Je participe** pour créer ton équipe",
-            color=0x9b59b6
-        )
+    channel = await bot.fetch_channel(INSCRIPTION_CHANNEL)
 
-        await channel.send(embed=embed, view=InscriptionView())
+    embed = discord.Embed(
+        title="🎮 TOURNOI DOFUS TOUCH",
+        description="Clique sur Je participe",
+        color=0x9b59b6
+    )
+
+    await channel.send(embed=embed, view=InscriptionView())
 
     await update_teams_embed()
 
